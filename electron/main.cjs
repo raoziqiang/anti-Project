@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const { startServer, PORT } = require('./server.cjs');
 
@@ -58,6 +59,8 @@ function createPetWindow() {
   const winWidth = 400;
   const winHeight = 540;
 
+  const appIconPath = path.join(__dirname, 'icon.png');
+
   petWindow = new BrowserWindow({
     width: winWidth,
     height: winHeight,
@@ -69,6 +72,7 @@ function createPetWindow() {
     resizable: false,
     hasShadow: false,
     skipTaskbar: false,
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
@@ -124,6 +128,8 @@ function createStudioWindow() {
     return;
   }
 
+  const appIconPath = path.join(__dirname, 'icon.png');
+
   studioWindow = new BrowserWindow({
     width: 1040,
     height: 740,
@@ -132,6 +138,7 @@ function createStudioWindow() {
     frame: true,
     title: 'AI 桌面伴侣 - 形象工坊 & 模型与 Agent 协作中心',
     backgroundColor: '#090d16',
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
@@ -148,17 +155,9 @@ function createStudioWindow() {
 }
 
 function setupTray() {
-  // Simple clean SVG icon for tray
-  const iconSvg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
-      <circle cx="16" cy="16" r="14" fill="#38bdf8"/>
-      <circle cx="11" cy="14" r="3" fill="#ffffff"/>
-      <circle cx="21" cy="14" r="3" fill="#ffffff"/>
-      <path d="M12 21 Q16 25 20 21" stroke="#0f172a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-    </svg>
-  `;
-  const icon = nativeImage.createFromBuffer(Buffer.from(iconSvg));
-  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  const trayIconPath = path.join(__dirname, 'tray-icon.png');
+  const trayImage = nativeImage.createFromPath(trayIconPath);
+  tray = new Tray(trayImage);
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -192,6 +191,15 @@ function setupTray() {
 
   tray.setToolTip('AI 桌面宠物 & Agent 协作中心');
   tray.setContextMenu(contextMenu);
+  tray.on('click', () => {
+    if (petWindow) {
+      if (petWindow.isVisible()) {
+        petWindow.focus();
+      } else {
+        petWindow.show();
+      }
+    }
+  });
   tray.on('double-click', () => {
     createStudioWindow();
   });
