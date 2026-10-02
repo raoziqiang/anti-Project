@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleAlwaysOnTop: (val) => {
     ipcRenderer.send('set-always-on-top', val);
   },
+  setPetWindowSize: (size) => {
+    ipcRenderer.send('set-pet-window-size', size);
+  },
   closeApp: () => {
     ipcRenderer.send('close-app');
   },

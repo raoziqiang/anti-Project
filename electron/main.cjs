@@ -81,6 +81,26 @@ function createPetWindow() {
       petWindow.setAlwaysOnTop(val);
     }
   });
+
+  ipcMain.on('set-pet-window-size', (event, size) => {
+    if (petWindow && !petWindow.isDestroyed() && size) {
+      const primaryDisplay = screen.getPrimaryDisplay();
+      const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+      const targetWidth = Math.max(280, Math.min(650, Math.round(size.width || 380)));
+      const targetHeight = Math.max(380, Math.min(800, Math.round(size.height || 500)));
+      
+      const bounds = petWindow.getBounds();
+      const newX = bounds.x + bounds.width - targetWidth;
+      const newY = bounds.y + bounds.height - targetHeight;
+
+      petWindow.setBounds({
+        x: Math.max(0, Math.min(screenWidth - targetWidth, newX)),
+        y: Math.max(0, Math.min(screenHeight - targetHeight, newY)),
+        width: targetWidth,
+        height: targetHeight
+      });
+    }
+  });
 }
 
 function createStudioWindow() {

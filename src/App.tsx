@@ -152,6 +152,20 @@ export const App: React.FC = () => {
     soundService.setMuted(!appSettings.soundEnabled);
   }, [appSettings]);
 
+  // Dynamically adapt Electron window size based on pet scale
+  useEffect(() => {
+    if (isElectron && viewMode === 'pet') {
+      const baseWidth = 380;
+      const baseHeight = 500;
+      const targetWidth = Math.round(baseWidth * (0.6 + appSettings.petScale * 0.4));
+      const targetHeight = Math.round(baseHeight * (0.6 + appSettings.petScale * 0.4));
+      (window as any).electronAPI?.setPetWindowSize?.({
+        width: targetWidth,
+        height: targetHeight
+      });
+    }
+  }, [appSettings.petScale, isElectron, viewMode]);
+
   // Initial welcome message
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -488,6 +502,8 @@ export const App: React.FC = () => {
           isWsConnected={isWsConnected}
           isSoundMuted={!appSettings.soundEnabled}
           onToggleSound={() => setAppSettings(prev => ({ ...prev, soundEnabled: !prev.soundEnabled }))}
+          currentScale={appSettings.petScale}
+          onChangeScale={(newScale) => setAppSettings(prev => ({ ...prev, petScale: newScale }))}
           isLoading={isStreaming}
         />
       </div>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Sparkles, Wand2, Cpu, Radio, User, Settings, Check, Trash2, Shield, Activity, RefreshCw } from 'lucide-react';
+import { X, Sparkles, Wand2, Cpu, Radio, User, Settings, Check, Trash2, Shield, Activity, RefreshCw, Scaling, RotateCcw, Minus, Plus } from 'lucide-react';
 import { PetAvatar, LLMConfig, Persona, AppSettings, AgentNotification } from '../types';
 import { StylizeStudio } from './StylizeStudio';
 import { ModelGateway } from './ModelGateway';
@@ -49,6 +49,8 @@ export const StudioModal: React.FC<StudioModalProps> = ({
   onTriggerTestNotification
 }) => {
   const [activeTab, setActiveTab] = useState<'pets' | 'stylize' | 'llm' | 'agents' | 'persona' | 'settings'>('pets');
+  const activePet = pets.find(p => p.id === activePetId) || pets[0];
+  const petPreviewUrl = activePet ? (activePet.sprites.happy || activePet.sprites.idle) : null;
 
   if (!isOpen) return null;
 
@@ -408,22 +410,233 @@ export const StudioModal: React.FC<StudioModalProps> = ({
                     </label>
                   </div>
 
-                  {/* Pet Scale slider */}
-                  <div style={{ padding: '16px 0 10px 0', borderBottom: '1px solid var(--border-subtle)' }}>
-                    <div className="studio-slider-wrapper">
-                      <div className="studio-slider-header">
-                        <span>宠物视觉缩放比例 (Scale)</span>
-                        <span className="studio-slider-val">{appSettings.petScale}x</span>
+                  {/* Pet Scale & Bounds Configuration Section */}
+                  <div style={{ padding: '18px 0', borderBottom: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div className="studio-toggle-label">
+                        <span className="studio-toggle-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Scaling size={16} style={{ color: 'var(--accent-cyan)' }} />
+                          伴侣视觉尺寸与视窗缩放 (Pet Scale & Bounds)
+                        </span>
+                        <span className="studio-toggle-desc">
+                          自由调节伴侣形象大小，支持桌面端与独立视窗动态等比适应（范围 50% - 200%）
+                        </span>
                       </div>
-                      <input
-                        type="range"
-                        min="0.6"
-                        max="1.5"
-                        step="0.05"
-                        value={appSettings.petScale}
-                        onChange={(e) => onUpdateAppSettings({ ...appSettings, petScale: Number(e.target.value) })}
-                        className="studio-slider"
-                      />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          className="studio-slider-val"
+                          style={{
+                            background: 'rgba(56, 189, 248, 0.15)',
+                            border: '1px solid rgba(56, 189, 248, 0.3)',
+                            padding: '3px 10px',
+                            borderRadius: '9999px',
+                            fontSize: '13px'
+                          }}
+                        >
+                          {Math.round((appSettings.petScale || 1.0) * 100)}% ({appSettings.petScale}x)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            soundService.playPop();
+                            onUpdateAppSettings({ ...appSettings, petScale: 1.0 });
+                          }}
+                          title="恢复 100% 默认比例"
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            color: 'var(--text-sub)',
+                            cursor: 'pointer',
+                            padding: '4px 8px',
+                            borderRadius: '6px',
+                            fontSize: '11px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <RotateCcw size={12} />
+                          <span>重置 1.0x</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Presets Chips */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                      {[
+                        { scale: 0.7, label: '迷你轻盈', pct: '70%' },
+                        { scale: 0.85, label: '舒适紧凑', pct: '85%' },
+                        { scale: 1.0, label: '标准经典', pct: '100%' },
+                        { scale: 1.3, label: '清晰放大', pct: '130%' },
+                        { scale: 1.6, label: '巨幕醒目', pct: '160%' },
+                      ].map((preset) => {
+                        const isCurrent = Math.abs((appSettings.petScale || 1.0) - preset.scale) < 0.02;
+                        return (
+                          <button
+                            key={preset.scale}
+                            type="button"
+                            onClick={() => {
+                              soundService.playPop();
+                              onUpdateAppSettings({ ...appSettings, petScale: preset.scale });
+                            }}
+                            style={{
+                              padding: '8px 10px',
+                              borderRadius: '8px',
+                              border: isCurrent
+                                ? '1px solid var(--accent-cyan)'
+                                : '1px solid rgba(255, 255, 255, 0.08)',
+                              background: isCurrent
+                                ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%)'
+                                : 'rgba(255, 255, 255, 0.04)',
+                              color: isCurrent ? 'var(--accent-cyan)' : 'var(--text-sub)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: '2px',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <span style={{ fontSize: '11px', fontWeight: 600 }}>{preset.label}</span>
+                            <span style={{ fontSize: '10px', opacity: 0.75, fontFamily: 'monospace' }}>{preset.pct}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Stepper + Continuous Slider */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '2px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextScale = Math.max(0.5, Math.round(((appSettings.petScale || 1.0) - 0.05) * 100) / 100);
+                          soundService.playPop();
+                          onUpdateAppSettings({ ...appSettings, petScale: nextScale });
+                        }}
+                        title="微调缩小 -5%"
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          color: '#fff',
+                          borderRadius: '8px',
+                          width: '32px',
+                          height: '32px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Minus size={14} />
+                      </button>
+
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <input
+                          type="range"
+                          min="0.5"
+                          max="2.0"
+                          step="0.05"
+                          value={appSettings.petScale}
+                          onChange={(e) => onUpdateAppSettings({ ...appSettings, petScale: Number(e.target.value) })}
+                          className="studio-slider"
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>
+                          <span>0.5x (50%)</span>
+                          <span>1.0x (标准)</span>
+                          <span>1.5x</span>
+                          <span>2.0x (200%)</span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextScale = Math.min(2.0, Math.round(((appSettings.petScale || 1.0) + 0.05) * 100) / 100);
+                          soundService.playPop();
+                          onUpdateAppSettings({ ...appSettings, petScale: nextScale });
+                        }}
+                        title="微调放大 +5%"
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                          color: '#fff',
+                          borderRadius: '8px',
+                          width: '32px',
+                          height: '32px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+
+                    {/* Live Preview Mini Stage */}
+                    <div style={{
+                      background: 'radial-gradient(circle, rgba(56, 189, 248, 0.08) 1px, transparent 1px) 0 0/16px 16px, rgba(7, 10, 18, 0.6)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      borderRadius: '12px',
+                      padding: '12px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      marginTop: '4px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div
+                          style={{
+                            width: '80px',
+                            height: '80px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            position: 'relative'
+                          }}
+                        >
+                          {petPreviewUrl ? (
+                            <img
+                              src={petPreviewUrl}
+                              alt={activePet?.name || 'Pet'}
+                              style={{
+                                maxWidth: '70px',
+                                maxHeight: '70px',
+                                transform: `scale(${Math.max(0.6, Math.min(1.4, (appSettings.petScale || 1.0) * 0.85))})`,
+                                transition: 'transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                                filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.4))'
+                              }}
+                            />
+                          ) : (
+                            <span style={{ fontSize: '32px' }}>🐱</span>
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>当前形象: {activePet?.name || '伴侣'}</span>
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '3px' }}>
+                            视窗尺寸预估: ~{Math.round(380 * (0.6 + (appSettings.petScale || 1.0) * 0.4))} × {Math.round(500 * (0.6 + (appSettings.petScale || 1.0) * 0.4))} px
+                          </div>
+                          <div style={{ fontSize: '11px', color: 'var(--accent-cyan)', marginTop: '3px', opacity: 0.85 }}>
+                            💡 提示：在桌面上随时点击快捷栏中的 📏 按钮亦可直接呼出调速气泡
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{
+                        padding: '6px 12px',
+                        borderRadius: '8px',
+                        background: 'rgba(255, 255, 255, 0.04)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        textAlign: 'right'
+                      }}>
+                        <div style={{ fontSize: '10px', color: 'var(--text-dim)' }}>缩放状态</div>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-cyan)', fontFamily: 'monospace' }}>
+                          {appSettings.petScale >= 1.3 ? '清晰放大' : appSettings.petScale <= 0.85 ? '紧凑便携' : '标准经典'}
+                        </div>
+                      </div>
                     </div>
                   </div>
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Send, Settings, Smile, Volume2, VolumeX } from 'lucide-react';
+import { Send, Settings, Smile, Volume2, VolumeX, Scaling, Minus, Plus, RotateCcw } from 'lucide-react';
 import { PetEmotion } from '../types';
 
 interface QuickChatBarProps {
@@ -9,6 +9,8 @@ interface QuickChatBarProps {
   isWsConnected: boolean;
   isSoundMuted: boolean;
   onToggleSound: () => void;
+  currentScale?: number;
+  onChangeScale?: (scale: number) => void;
   isLoading?: boolean;
 }
 
@@ -19,10 +21,13 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
   isWsConnected,
   isSoundMuted,
   onToggleSound,
+  currentScale = 1.0,
+  onChangeScale,
   isLoading
 }) => {
   const [input, setInput] = useState('');
   const [showEmotions, setShowEmotions] = useState(false);
+  const [showSizeMenu, setShowSizeMenu] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,6 +85,146 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
               <span style={{ fontSize: '11px' }}>{item.label}</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Quick Size Adjustment Popover */}
+      {showSizeMenu && onChangeScale && (
+        <div style={{
+          background: 'rgba(11, 16, 28, 0.96)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(56, 189, 248, 0.35)',
+          borderRadius: '14px',
+          padding: '10px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          boxShadow: '0 12px 30px rgba(0, 0, 0, 0.6), 0 0 16px rgba(56, 189, 248, 0.15)',
+          animation: 'bubblePop 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+        }}>
+          {/* Header with percentage & reset */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '11.5px', fontWeight: 600, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <Scaling size={13} style={{ color: '#38bdf8' }} /> 伴侣大小调节
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                color: '#38bdf8',
+                background: 'rgba(56, 189, 248, 0.15)',
+                padding: '2px 8px',
+                borderRadius: '9999px',
+                fontFamily: 'monospace'
+              }}>
+                {Math.round((currentScale || 1) * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => onChangeScale(1.0)}
+                title="复位到 100% 标准大小"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-dim)',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <RotateCcw size={11} />
+              </button>
+            </div>
+          </div>
+
+          {/* Stepper + Slider */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={() => onChangeScale(Math.max(0.5, Math.round(((currentScale || 1) - 0.1) * 100) / 100))}
+              title="缩小 -10%"
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                color: '#fff',
+                borderRadius: '6px',
+                width: '24px',
+                height: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <Minus size={12} />
+            </button>
+
+            <input
+              type="range"
+              min="0.5"
+              max="2.0"
+              step="0.05"
+              value={currentScale || 1.0}
+              onChange={(e) => onChangeScale(Number(e.target.value))}
+              className="studio-slider"
+              style={{ flex: 1 }}
+            />
+
+            <button
+              type="button"
+              onClick={() => onChangeScale(Math.min(2.0, Math.round(((currentScale || 1) + 0.1) * 100) / 100))}
+              title="放大 +10%"
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                color: '#fff',
+                borderRadius: '6px',
+                width: '24px',
+                height: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+
+          {/* Quick preset chips */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '6px' }}>
+            {[
+              { label: '迷你 (70%)', scale: 0.7 },
+              { label: '标准 (100%)', scale: 1.0 },
+              { label: '清晰 (130%)', scale: 1.3 },
+              { label: '超大 (160%)', scale: 1.6 }
+            ].map(chip => {
+              const isActive = Math.abs((currentScale || 1.0) - chip.scale) < 0.04;
+              return (
+                <button
+                  key={chip.scale}
+                  type="button"
+                  onClick={() => onChangeScale(chip.scale)}
+                  style={{
+                    flex: 1,
+                    padding: '4px 0',
+                    fontSize: '10.5px',
+                    borderRadius: '6px',
+                    border: isActive ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.08)',
+                    background: isActive ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                    color: isActive ? '#fff' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    fontWeight: isActive ? 600 : 400,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -158,11 +303,14 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
         }}>
           <button
             type="button"
-            onClick={() => setShowEmotions(!showEmotions)}
+            onClick={() => {
+              setShowEmotions(!showEmotions);
+              setShowSizeMenu(false);
+            }}
             style={{
-              background: 'transparent',
+              background: showEmotions ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
               border: 'none',
-              color: 'var(--text-sub)',
+              color: showEmotions ? '#38bdf8' : 'var(--text-sub)',
               padding: '4px',
               borderRadius: '6px',
               cursor: 'pointer',
@@ -173,6 +321,29 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
           >
             <Smile size={15} />
           </button>
+
+          {onChangeScale && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowSizeMenu(!showSizeMenu);
+                setShowEmotions(false);
+              }}
+              style={{
+                background: showSizeMenu ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+                border: 'none',
+                color: showSizeMenu ? '#38bdf8' : 'var(--text-sub)',
+                padding: '4px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center'
+              }}
+              title="调节伴侣尺寸 (缩放)"
+            >
+              <Scaling size={15} />
+            </button>
+          )}
 
           <button
             type="button"
