@@ -155,7 +155,7 @@ export const App: React.FC = () => {
   // Dynamically adapt Electron window size based on pet scale
   useEffect(() => {
     if (isElectron && viewMode === 'pet') {
-      const baseWidth = 380;
+      const baseWidth = 400;
       const baseHeight = 540;
       const targetWidth = Math.round(baseWidth * (0.6 + appSettings.petScale * 0.4));
       const targetHeight = Math.round(baseHeight * (0.6 + appSettings.petScale * 0.4));
@@ -452,9 +452,9 @@ export const App: React.FC = () => {
           position: 'relative',
           zIndex: 20,
           width: '100%',
-          maxWidth: '360px',
+          maxWidth: '380px',
           margin: '0 auto',
-          padding: '12px',
+          padding: '8px 10px',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',

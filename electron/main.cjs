@@ -55,7 +55,7 @@ function createPetWindow() {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
 
-  const winWidth = 380;
+  const winWidth = 400;
   const winHeight = 540;
 
   petWindow = new BrowserWindow({

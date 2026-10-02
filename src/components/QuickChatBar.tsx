@@ -232,6 +232,7 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
       <form onSubmit={handleSubmit} style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%' }}>
         <div style={{
           flex: 1,
+          minWidth: 0,
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
@@ -259,10 +260,12 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="呼叫伴侣或向Agent提问..."
+            placeholder="呼叫伴侣或提问..."
             disabled={isLoading}
             style={{
               flex: 1,
+              minWidth: 0,
+              width: '100%',
               background: 'transparent',
               border: 'none',
               outline: 'none',
@@ -275,6 +278,7 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
             type="submit"
             disabled={!input.trim() || isLoading}
             style={{
+              flexShrink: 0,
               background: 'transparent',
               border: 'none',
               color: '#38bdf8',
@@ -292,14 +296,16 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
 
         {/* Action icons button group */}
         <div style={{
+          flexShrink: 0,
           display: 'flex',
           alignItems: 'center',
-          gap: '4px',
+          gap: '2px',
           background: 'rgba(11, 16, 28, 0.9)',
           backdropFilter: 'blur(16px)',
           border: '1px solid rgba(255, 255, 255, 0.12)',
           borderRadius: '12px',
-          padding: '4px 6px'
+          padding: '4px 5px',
+          boxShadow: '0 4px 14px rgba(0,0,0,0.3)'
         }}>
           <button
             type="button"
@@ -308,6 +314,7 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
               setShowSizeMenu(false);
             }}
             style={{
+              flexShrink: 0,
               background: showEmotions ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
               border: 'none',
               color: showEmotions ? '#38bdf8' : 'var(--text-sub)',
@@ -319,7 +326,7 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
             }}
             title="切换表情"
           >
-            <Smile size={15} />
+            <Smile size={14} />
           </button>
 
           {onChangeScale && (
@@ -330,6 +337,7 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
                 setShowEmotions(false);
               }}
               style={{
+                flexShrink: 0,
                 background: showSizeMenu ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
                 border: 'none',
                 color: showSizeMenu ? '#38bdf8' : 'var(--text-sub)',
@@ -341,7 +349,7 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
               }}
               title="调节伴侣尺寸 (缩放)"
             >
-              <Scaling size={15} />
+              <Scaling size={14} />
             </button>
           )}
 
@@ -349,6 +357,7 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
             type="button"
             onClick={onToggleSound}
             style={{
+              flexShrink: 0,
               background: 'transparent',
               border: 'none',
               color: isSoundMuted ? 'var(--text-dim)' : '#38bdf8',
@@ -360,13 +369,14 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
             }}
             title={isSoundMuted ? '开启声音' : '静音'}
           >
-            {isSoundMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+            {isSoundMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </button>
 
           <button
             type="button"
             onClick={onOpenStudio}
             style={{
+              flexShrink: 0,
               background: 'transparent',
               border: 'none',
               color: '#38bdf8',
@@ -378,7 +388,7 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
             }}
             title="打开形象工坊与控制中心"
           >
-            <Settings size={15} />
+            <Settings size={14} />
           </button>
         </div>
       </form>
