@@ -11,7 +11,8 @@
     "dev": "vite",
     "server": "node electron/server.cjs",
     "start": "electron electron/main.cjs",
-    "mcp": "node electron/mcp-server.cjs"
+    "mcp": "node electron/mcp-server.cjs",
+    "package:win": "node electron/package-app.cjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -23,6 +24,7 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
+    "@electron/packager": "^20.3.0",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/node": "^22.10.1",

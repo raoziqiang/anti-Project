@@ -38,3 +38,7 @@ node_modules/
 *.njsproj
 *.sln
 *.sw?
+
+# Packaging and distribution
+release/
+dist-electron/
