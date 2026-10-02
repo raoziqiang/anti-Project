@@ -156,7 +156,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (isElectron && viewMode === 'pet') {
       const baseWidth = 380;
-      const baseHeight = 500;
+      const baseHeight = 540;
       const targetWidth = Math.round(baseWidth * (0.6 + appSettings.petScale * 0.4));
       const targetHeight = Math.round(baseHeight * (0.6 + appSettings.petScale * 0.4));
       (window as any).electronAPI?.setPetWindowSize?.({
@@ -185,7 +185,14 @@ export const App: React.FC = () => {
       }
     }, 600);
 
-    return () => clearTimeout(timer);
+    const dismissTimer = setTimeout(() => {
+      setCurrentMessage(prev => (prev?.id === 'welcome' ? null : prev));
+    }, 9000);
+
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(dismissTimer);
+    };
   }, [activePetId]);
 
   // Subscribe to Agent Hub WebSocket events

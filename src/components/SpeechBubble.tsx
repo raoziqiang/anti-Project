@@ -32,7 +32,7 @@ export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
           border: '1px solid rgba(56, 189, 248, 0.35)',
           borderRadius: '16px',
           padding: '14px 16px',
-          boxShadow: '0 16px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05)',
+          boxShadow: 'none',
           position: 'relative',
           color: '#f8fafc'
         }}
