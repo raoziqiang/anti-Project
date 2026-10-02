@@ -3,10 +3,25 @@ const path = require('path');
 const http = require('http');
 const { startServer, PORT } = require('./server.cjs');
 
+// Enforce single instance lock to avoid port collisions and duplicate desktop pets
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  console.log('[Electron] Another instance is already running. Quitting secondary instance.');
+  app.quit();
+}
+
 let petWindow = null;
 let studioWindow = null;
 let tray = null;
 let isDevServerAlive = false;
+
+app.on('second-instance', () => {
+  if (petWindow) {
+    if (petWindow.isMinimized()) petWindow.restore();
+    petWindow.show();
+    petWindow.focus();
+  }
+});
 
 const DEV_URL = 'http://localhost:5173';
 

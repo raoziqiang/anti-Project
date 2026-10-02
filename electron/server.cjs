@@ -12,6 +12,23 @@ let currentPort = PORT;
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
+// Graceful error handling to prevent uncaught exception popups when port is in use
+wss.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.warn('[Server] WebSocketServer: Port already occupied by another instance.');
+  } else {
+    console.error('[Server] WebSocketServer error:', err);
+  }
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.warn(`[Server] HTTP server: Port ${currentPort} is already in use.`);
+  } else {
+    console.error('[Server] HTTP server error:', err);
+  }
+});
+
 // Store connected WebSocket clients (Pet window, Agent extensions)
 const clients = new Set();
 
@@ -207,19 +224,35 @@ app.post('/api/webhook/:source', (req, res) => {
 
 function startServer(port = PORT) {
   currentPort = port;
-  return new Promise((resolve, reject) => {
-    server.once('error', (err) => {
-      if (err.code === 'EADDRINUSE') {
-        console.warn(`[Server] Port ${port} is already in use. Assuming existing gateway is running.`);
+  return new Promise((resolve) => {
+    let resolved = false;
+
+    const onStartupError = (err) => {
+      if (!resolved) {
+        resolved = true;
+        if (err.code === 'EADDRINUSE') {
+          console.warn(`[Server] Port ${port} is already in use. Assuming existing gateway is running.`);
+        } else {
+          console.error(`[Server] Server error during listen on port ${port}:`, err);
+        }
         resolve(server);
-      } else {
-        reject(err);
       }
-    });
-    server.listen(port, () => {
-      console.log(`[Server] Desktop Pet Gateway listening at http://localhost:${port}`);
-      resolve(server);
-    });
+    };
+
+    server.once('error', onStartupError);
+
+    try {
+      server.listen(port, () => {
+        if (!resolved) {
+          resolved = true;
+          server.removeListener('error', onStartupError);
+          console.log(`[Server] Desktop Pet Gateway listening at http://localhost:${port}`);
+          resolve(server);
+        }
+      });
+    } catch (err) {
+      onStartupError(err);
+    }
   });
 }
 
