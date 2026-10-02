@@ -1,0 +1,37 @@
+{
+  "name": "ai-desktop-pet",
+  "version": "1.0.0",
+  "description": "Cross-Platform AI Desktop Pet with Media Stylization, Multi-LLM Gateway & Agent Ecosystem Hub",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev:vite": "vite",
+    "build:vite": "vite build",
+    "dev:electron": "electron electron/main.cjs",
+    "dev": "vite",
+    "server": "node electron/server.cjs",
+    "start": "electron electron/main.cjs",
+    "mcp": "node electron/mcp-server.cjs"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "lucide-react": "^1.16.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.1",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.5.13",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^34.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3"
+  }
+}
