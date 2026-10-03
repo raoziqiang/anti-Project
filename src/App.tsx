@@ -31,6 +31,7 @@ export const App: React.FC = () => {
   const [currentMessage, setCurrentMessage] = useState<ChatMessage | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isStudioOpen, setIsStudioOpen] = useState(false);
+  const [studioInitialTab, setStudioInitialTab] = useState<'pets' | 'stylize' | 'llm' | 'agents' | 'persona' | 'audio' | 'settings'>('pets');
 
   // 2. Persona State
   const [currentPersona, setCurrentPersona] = useState<Persona>(() => {
@@ -124,6 +125,13 @@ export const App: React.FC = () => {
   const activePet = pets.find(p => p.id === activePetId) || pets[0] || DEFAULT_PETS[0];
 
   const isHydrated = useRef(false);
+  const isHydrating = useRef(true);
+
+  // Keep latest settings and persona in refs to avoid rebuilding WebSocket listeners on every slider drag
+  const appSettingsRef = useRef(appSettings);
+  appSettingsRef.current = appSettings;
+  const currentPersonaRef = useRef(currentPersona);
+  currentPersonaRef.current = currentPersona;
 
   // 1. Initial hydration from persistent storage (Electron IPC / Gateway REST / LocalStorage)
   useEffect(() => {
@@ -155,29 +163,42 @@ export const App: React.FC = () => {
       if (config.pets && config.pets.length > 0) {
         setPets(config.pets);
       }
-      isHydrated.current = true;
+      // Give React one tick to settle initial state without triggering downstream saves
+      setTimeout(() => {
+        isHydrated.current = true;
+        isHydrating.current = false;
+      }, 100);
     });
 
-    // 2. Cross-window / WebSocket config sync
+    // 2. Cross-window / WebSocket config sync with strict equality checks
     const unsubscribe = configService.onConfigChange((updated) => {
       if (updated.llmConfig) {
-        setLlmConfig(prev => ({
-          ...prev,
-          ...updated.llmConfig,
-          apiKey: updated.llmConfig?.apiKey || prev.apiKey || ''
-        }));
+        setLlmConfig(prev => {
+          const next = {
+            ...prev,
+            ...updated.llmConfig,
+            apiKey: updated.llmConfig?.apiKey || prev.apiKey || ''
+          };
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
       }
       if (updated.appSettings) {
-        setAppSettings(prev => ({ ...prev, ...updated.appSettings }));
+        setAppSettings(prev => {
+          const next = { ...prev, ...updated.appSettings };
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
       }
       if (updated.currentPersona) {
-        setCurrentPersona(prev => ({ ...prev, ...updated.currentPersona }));
+        setCurrentPersona(prev => {
+          const next = { ...prev, ...updated.currentPersona };
+          return JSON.stringify(prev) === JSON.stringify(next) ? prev : next;
+        });
       }
       if (updated.activePetId) {
-        setActivePetId(updated.activePetId);
+        setActivePetId(prev => (prev === updated.activePetId ? prev : updated.activePetId!));
       }
       if (updated.pets && updated.pets.length > 0) {
-        setPets(updated.pets);
+        setPets(prev => (JSON.stringify(prev) === JSON.stringify(updated.pets) ? prev : updated.pets!));
       }
     });
 
@@ -187,24 +208,24 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Save changes to persistent storage & localStorage (guarded by isHydrated to avoid race condition wipe)
+  // Save changes to persistent storage & localStorage (guarded to avoid startup ping-pong)
   useEffect(() => {
-    if (!isHydrated.current) return;
+    if (!isHydrated.current || isHydrating.current) return;
     configService.savePersistentConfig({ pets });
   }, [pets]);
 
   useEffect(() => {
-    if (!isHydrated.current) return;
+    if (!isHydrated.current || isHydrating.current) return;
     configService.savePersistentConfig({ activePetId });
   }, [activePetId]);
 
   useEffect(() => {
-    if (!isHydrated.current) return;
+    if (!isHydrated.current || isHydrating.current) return;
     configService.savePersistentConfig({ currentPersona });
   }, [currentPersona]);
 
   useEffect(() => {
-    if (!isHydrated.current) return;
+    if (!isHydrated.current || isHydrating.current) return;
     configService.savePersistentConfig({ llmConfig });
   }, [llmConfig]);
 
@@ -215,7 +236,7 @@ export const App: React.FC = () => {
       configService.setGatewayPort(appSettings.apiPort);
       agentService.setPort(appSettings.apiPort);
     }
-    if (!isHydrated.current) return;
+    if (!isHydrated.current || isHydrating.current) return;
     configService.savePersistentConfig({ appSettings });
   }, [appSettings]);
 
@@ -262,12 +283,11 @@ export const App: React.FC = () => {
     };
   }, [activePetId]);
 
-  // Subscribe to Agent Hub WebSocket events
+  // Subscribe to Agent Hub WebSocket events (initialized once, uses refs for current settings)
   useEffect(() => {
-    // Check connection interval
     const interval = setInterval(() => {
       setIsWsConnected(agentService.isWsConnected());
-    }, 1500);
+    }, 2000);
 
     // Notification listener
     const unsubNotif = agentService.onNotification((notif) => {
@@ -285,7 +305,8 @@ export const App: React.FC = () => {
         setEmotion(notif.emotion);
       }
 
-      if (notif.sound && appSettings.soundEnabled) {
+      const settings = appSettingsRef.current;
+      if (notif.sound && settings.soundEnabled) {
         if (notif.emotion === 'celebrating') soundService.playCelebrate();
         else soundService.playAlert();
       }
@@ -300,10 +321,12 @@ export const App: React.FC = () => {
     const unsubMsg = agentService.onMessage((msg) => {
       setCurrentMessage(msg);
       if (msg.emotion) setEmotion(msg.emotion);
-      if (appSettings.soundEnabled) {
+      const settings = appSettingsRef.current;
+      const persona = currentPersonaRef.current;
+      if (settings.soundEnabled) {
         soundService.playReceive();
-        if (appSettings.ttsEnabled && msg.content) {
-          soundService.speak(msg.content, currentPersona.speechPitch, currentPersona.speechRate, currentPersona.voiceName);
+        if (settings.ttsEnabled && msg.content) {
+          soundService.speak(msg.content, persona.speechPitch, persona.speechRate, persona.voiceName);
         }
       }
     });
@@ -320,7 +343,7 @@ export const App: React.FC = () => {
       unsubEmotion();
       unsubMsg();
     };
-  }, [appSettings]);
+  }, []);
 
   // User chat submission
   const handleUserSendMessage = async (text: string) => {
@@ -414,6 +437,7 @@ export const App: React.FC = () => {
       <StudioModal
         isOpen={true}
         isFullWindow={true}
+        initialTab={studioInitialTab}
         onClose={() => {
           if (isElectron) {
             window.close();
@@ -447,10 +471,12 @@ export const App: React.FC = () => {
     );
   }
 
-  const handleOpenStudio = () => {
+  const handleOpenStudio = (targetTab?: 'pets' | 'stylize' | 'llm' | 'agents' | 'persona' | 'audio' | 'settings') => {
     soundService.playPop();
+    const tab = targetTab || 'pets';
+    setStudioInitialTab(tab);
     if (isElectron && (window as any).electronAPI?.openStudio) {
-      (window as any).electronAPI.openStudio();
+      (window as any).electronAPI.openStudio(tab);
     } else {
       setIsStudioOpen(true);
     }
@@ -577,12 +603,23 @@ export const App: React.FC = () => {
         <QuickChatBar
           onSendMessage={handleUserSendMessage}
           onSetEmotion={setEmotion}
-          onOpenStudio={handleOpenStudio}
+          onOpenStudio={() => handleOpenStudio()}
+          onOpenAudioCenter={() => handleOpenStudio('audio')}
           isWsConnected={isWsConnected}
           isSoundMuted={!appSettings.soundEnabled}
-          onToggleSound={() => setAppSettings(prev => ({ ...prev, soundEnabled: !prev.soundEnabled }))}
+          onToggleSound={() => {
+            const next = !appSettings.soundEnabled;
+            setAppSettings(prev => ({ ...prev, soundEnabled: next }));
+            soundService.setMuted(!next);
+            if (next) soundService.playHappy();
+          }}
           currentScale={appSettings.petScale}
           onChangeScale={(newScale) => setAppSettings(prev => ({ ...prev, petScale: newScale }))}
+          currentVolume={appSettings.volume ?? 0.8}
+          onChangeVolume={(v) => {
+            setAppSettings(prev => ({ ...prev, volume: v, soundEnabled: v > 0 }));
+            soundService.setVolume(v);
+          }}
           isLoading={isStreaming}
         />
       </div>
@@ -590,6 +627,7 @@ export const App: React.FC = () => {
       {/* Studio / Settings Center Modal (Web mode fallback) */}
       <StudioModal
         isOpen={isStudioOpen}
+        initialTab={studioInitialTab}
         onClose={() => setIsStudioOpen(false)}
         pets={pets}
         activePetId={activePetId}

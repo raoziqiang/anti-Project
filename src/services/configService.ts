@@ -13,6 +13,9 @@ export interface PersistentConfig {
 class ConfigService {
   private listeners: Set<(config: PersistentConfig) => void> = new Set();
   private gatewayPort: number = 18989;
+  private saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private pendingPatch: PersistentConfig = {};
+  private lastSavedHash: string = '';
 
   constructor() {
     this.initListeners();
@@ -23,16 +26,16 @@ class ConfigService {
   }
 
   private initListeners() {
-    // 1. Electron IPC config-updated listener
+    // 1. Electron IPC config-updated listener (from other windows)
     if (typeof window !== 'undefined' && (window as any).electronAPI?.onConfigUpdated) {
       (window as any).electronAPI.onConfigUpdated((updated: PersistentConfig) => {
-        this.notifyListeners(updated);
+        this.handleExternalConfig(updated);
       });
     }
 
     // 2. WebSocket gateway listener
     agentService.onConfigUpdated((updated: PersistentConfig) => {
-      this.notifyListeners(updated);
+      this.handleExternalConfig(updated);
     });
 
     // 3. Fallback: window storage event
@@ -41,19 +44,27 @@ class ConfigService {
         if (!e.key || !e.newValue) return;
         try {
           if (e.key === 'ai_pet_llm') {
-            this.notifyListeners({ llmConfig: JSON.parse(e.newValue) });
+            this.handleExternalConfig({ llmConfig: JSON.parse(e.newValue) });
           } else if (e.key === 'ai_pet_settings') {
-            this.notifyListeners({ appSettings: JSON.parse(e.newValue) });
+            this.handleExternalConfig({ appSettings: JSON.parse(e.newValue) });
           } else if (e.key === 'ai_pet_persona') {
-            this.notifyListeners({ currentPersona: JSON.parse(e.newValue) });
+            this.handleExternalConfig({ currentPersona: JSON.parse(e.newValue) });
           } else if (e.key === 'ai_pet_active_id') {
-            this.notifyListeners({ activePetId: e.newValue });
+            this.handleExternalConfig({ activePetId: e.newValue });
           } else if (e.key === 'ai_pet_list') {
-            this.notifyListeners({ pets: JSON.parse(e.newValue) });
+            this.handleExternalConfig({ pets: JSON.parse(e.newValue) });
           }
         } catch {}
       });
     }
+  }
+
+  private handleExternalConfig(config: PersistentConfig) {
+    const json = JSON.stringify(config);
+    if (json === this.lastSavedHash) {
+      return; // Suppress echo from our own saves
+    }
+    this.notifyListeners(config);
   }
 
   private notifyListeners(config: PersistentConfig) {
@@ -98,7 +109,7 @@ class ConfigService {
     if (!diskConfig.llmConfig?.apiKey) {
       try {
         const port = this.gatewayPort || 18989;
-        const res = await fetch(`http://localhost:${port}/api/config`, { signal: AbortSignal.timeout(1500) });
+        const res = await fetch(`http://localhost:${port}/api/config`, { signal: AbortSignal.timeout(1000) });
         if (res.ok) {
           const data = await res.json();
           if (data && data.config) {
@@ -154,6 +165,9 @@ class ConfigService {
       }
     }
 
+    // Record baseline hash so initial render doesn't re-save identical data
+    this.lastSavedHash = JSON.stringify(diskConfig);
+
     // Synchronize disk values back to localStorage for instant startup cache
     if (diskConfig.llmConfig) {
       try {
@@ -165,13 +179,12 @@ class ConfigService {
   }
 
   /**
-   * Save configuration to all persistence layers:
-   * 1. localStorage for fast in-browser cache
-   * 2. Electron IPC saveConfig for native disk writes
-   * 3. Gateway REST API POST /api/config for backend disk writes and WebSocket sync
+   * Save configuration to persistence layers:
+   * - Immediately syncs to browser localStorage for responsive UI
+   * - Debounced (300ms) write to Electron IPC (or Gateway REST if in browser mode)
    */
   public async savePersistentConfig(patch: PersistentConfig): Promise<boolean> {
-    // 1. Immediately cache in localStorage
+    // 1. Immediately cache in localStorage (synchronous and instant)
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         if (patch.llmConfig) {
@@ -200,35 +213,72 @@ class ConfigService {
       }
     }
 
-    let saved = false;
-
-    // 2. Electron IPC native disk write
-    if (typeof window !== 'undefined' && (window as any).electronAPI?.saveConfig) {
-      try {
-        await (window as any).electronAPI.saveConfig(patch);
-        saved = true;
-      } catch (e) {
-        console.warn('[ConfigService] Electron saveConfig failed:', e);
+    // 2. Buffer patches
+    this.pendingPatch = {
+      ...this.pendingPatch,
+      ...patch,
+      llmConfig: {
+        ...(this.pendingPatch.llmConfig || {}),
+        ...(patch.llmConfig || {})
+      },
+      appSettings: {
+        ...(this.pendingPatch.appSettings || {}),
+        ...(patch.appSettings || {})
+      },
+      currentPersona: {
+        ...(this.pendingPatch.currentPersona || {}),
+        ...(patch.currentPersona || {})
       }
-    }
+    };
 
-    // 3. Gateway REST API write (syncs user-config.json and AppData and broadcasts WebSocket event)
-    try {
-      const port = this.gatewayPort || 18989;
-      const res = await fetch(`http://localhost:${port}/api/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-        signal: AbortSignal.timeout(2000)
-      });
-      if (res.ok) {
-        saved = true;
+    // 3. Debounce actual disk / network flush
+    return new Promise((resolve) => {
+      if (this.saveDebounceTimer) {
+        clearTimeout(this.saveDebounceTimer);
       }
-    } catch (e) {
-      // Harmless if offline
-    }
 
-    return saved;
+      this.saveDebounceTimer = setTimeout(async () => {
+        const patchToSend = this.pendingPatch;
+        this.pendingPatch = {};
+
+        const patchJson = JSON.stringify(patchToSend);
+        if (patchJson === this.lastSavedHash) {
+          resolve(true);
+          return;
+        }
+
+        this.lastSavedHash = patchJson;
+        let saved = false;
+
+        // If running in Electron, use IPC ONLY (avoids double write & WebSocket echo)
+        if (typeof window !== 'undefined' && (window as any).electronAPI?.saveConfig) {
+          try {
+            await (window as any).electronAPI.saveConfig(patchToSend);
+            saved = true;
+          } catch (e) {
+            console.warn('[ConfigService] Electron saveConfig failed:', e);
+          }
+        } else {
+          // If in web browser preview, call the Gateway REST API
+          try {
+            const port = this.gatewayPort || 18989;
+            const res = await fetch(`http://localhost:${port}/api/config`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: patchJson,
+              signal: AbortSignal.timeout(1500)
+            });
+            if (res.ok) {
+              saved = true;
+            }
+          } catch (e) {
+            // Harmless if offline
+          }
+        }
+
+        resolve(saved);
+      }, 300);
+    });
   }
 }
 

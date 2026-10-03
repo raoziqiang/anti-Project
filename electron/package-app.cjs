@@ -3,30 +3,31 @@ const path = require('path');
 const fs = require('fs');
 
 async function buildAndPackage() {
-  console.log('=== [1/4] 生成并验证应用与托盘图标 (ICO & PNG) ===');
+  console.log('=== [0/4] 彻底清理旧版本构建产物与发布包 (Deep Clean) ===');
+  const releaseDir = path.join(__dirname, '../release');
+  if (fs.existsSync(releaseDir)) {
+    try {
+      fs.rmSync(releaseDir, { recursive: true, force: true });
+      console.log('[Clean] 已彻底删除旧版本 release 目录及所有旧构建安装文件');
+    } catch (e) {
+      console.warn('[Clean] 删除旧 release 目录出现提示:', e.message);
+    }
+  }
+
+  const distDir = path.join(__dirname, '../dist');
+  if (fs.existsSync(distDir)) {
+    try {
+      fs.rmSync(distDir, { recursive: true, force: true });
+      console.log('[Clean] 已清理前端旧 dist 构建产物与缓存');
+    } catch (e) {
+      console.warn('[Clean] 删除旧 dist 目录出现提示:', e.message);
+    }
+  }
+
+  console.log('\n=== [1/4] 生成并验证应用与托盘图标 (ICO & PNG) ===');
   require('./generate-icons.cjs');
-
-  // Verify icon.ico exists
-  const pngBuf = fs.readFileSync(path.join(__dirname, 'icon.png'));
-  const icoHeader = Buffer.alloc(6);
-  icoHeader.writeUInt16LE(0, 0);
-  icoHeader.writeUInt16LE(1, 2);
-  icoHeader.writeUInt16LE(1, 4);
-
-  const dirEntry = Buffer.alloc(16);
-  dirEntry.writeUInt8(64, 0);
-  dirEntry.writeUInt8(64, 1);
-  dirEntry.writeUInt8(0, 2);
-  dirEntry.writeUInt8(0, 3);
-  dirEntry.writeUInt16LE(1, 4);
-  dirEntry.writeUInt16LE(32, 6);
-  dirEntry.writeUInt32LE(pngBuf.length, 8);
-  dirEntry.writeUInt32LE(22, 12);
-
-  const icoBuf = Buffer.concat([icoHeader, dirEntry, pngBuf]);
   const icoPath = path.join(__dirname, 'icon.ico');
-  fs.writeFileSync(icoPath, icoBuf);
-  console.log(`[Icon] Windows 专属图标生成就绪: ${icoPath}`);
+  console.log(`[Icon] Windows 专属多尺寸图标生成就绪: ${icoPath}`);
 
   console.log('\n=== [2/4] 构建前端生产包 (Vite Production Build) ===');
   execSync('npm run build:vite', { stdio: 'inherit', cwd: path.join(__dirname, '..') });
@@ -95,14 +96,16 @@ function createDesktopShortcut(exePath, icoPath) {
   const shortcutName = 'AI 桌面元气伴侣.lnk';
   const workDir = path.dirname(exePath);
 
-  // Clean up any previously garbled shortcuts
+  // Clean up any previously created AI shortcuts on desktop
   for (const desktopDir of candidateDirs) {
     try {
       const files = fs.readdirSync(desktopDir);
       for (const f of files) {
-        if (f.startsWith('AI ') && f.endsWith('.lnk') && f !== shortcutName) {
-          fs.unlinkSync(path.join(desktopDir, f));
-          console.log(`[Shortcut] 清理旧快捷方式: ${f}`);
+        if ((f.includes('AI') || f.includes('桌面伴侣') || f.includes('元气伴侣')) && f.endsWith('.lnk')) {
+          try {
+            fs.unlinkSync(path.join(desktopDir, f));
+            console.log(`[Shortcut] 清理旧桌面快捷方式: ${f}`);
+          } catch {}
         }
       }
     } catch {}

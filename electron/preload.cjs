@@ -5,8 +5,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setIgnoreMouseEvents: (ignore, options) => {
     ipcRenderer.send('set-ignore-mouse-events', ignore, options);
   },
-  openStudio: () => {
-    ipcRenderer.send('open-studio');
+  openStudio: (tab) => {
+    ipcRenderer.send('open-studio', tab);
   },
   toggleAlwaysOnTop: (val) => {
     ipcRenderer.send('set-always-on-top', val);
@@ -19,6 +19,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onStudioOpened: (callback) => {
     ipcRenderer.on('show-studio', () => callback());
+  },
+  onSwitchTab: (callback) => {
+    const handler = (event, tab) => callback(tab);
+    ipcRenderer.on('switch-tab', handler);
+    return () => ipcRenderer.removeListener('switch-tab', handler);
   },
   loadConfig: () => ipcRenderer.invoke('load-config'),
   saveConfig: (patch) => ipcRenderer.invoke('save-config', patch),

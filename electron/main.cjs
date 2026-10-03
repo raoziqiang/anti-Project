@@ -4,6 +4,11 @@ const fs = require('fs');
 const http = require('http');
 const { startServer, PORT, getStoredConfig, saveStoredConfig } = require('./server.cjs');
 
+// Performance optimization switches for smooth transparent window & low latency
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+
 // Explicitly define application name so userData folder is unified in dev & prod
 app.name = 'AI-Desktop-Pet';
 
@@ -12,6 +17,7 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   console.log('[Electron] Another instance is already running. Quitting secondary instance.');
   app.quit();
+  process.exit(0);
 }
 
 let petWindow = null;
@@ -20,9 +26,9 @@ let tray = null;
 let isDevServerAlive = false;
 
 app.on('second-instance', () => {
-  if (petWindow) {
+  if (petWindow && !petWindow.isDestroyed()) {
     if (petWindow.isMinimized()) petWindow.restore();
-    petWindow.show();
+    if (!petWindow.isVisible()) petWindow.show();
     petWindow.focus();
   }
 });
@@ -37,7 +43,7 @@ function checkDevServer() {
     req.on('error', () => {
       resolve(false);
     });
-    req.setTimeout(300, () => {
+    req.setTimeout(250, () => {
       req.destroy();
       resolve(false);
     });
@@ -53,6 +59,34 @@ function loadAppUrl(win, viewName) {
   } else {
     win.loadFile(distHtml, { search: `?view=${viewName}` });
   }
+}
+
+const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged || process.env.ELECTRON_IS_DEV === '1';
+
+function setupDevShortcuts(win) {
+  if (!win || win.isDestroyed()) return;
+
+  win.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown') return;
+
+    // F12 or Ctrl+Shift+I: Open Chrome DevTools
+    if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
+      win.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+
+    // F5 or Ctrl+R: Refresh page
+    if (input.key === 'F5' || (input.control && !input.shift && input.key.toLowerCase() === 'r')) {
+      win.webContents.reload();
+      event.preventDefault();
+    }
+
+    // Ctrl+Shift+R: Hard reload ignoring cache
+    if (input.control && input.shift && input.key.toLowerCase() === 'r') {
+      win.webContents.reloadIgnoringCache();
+      event.preventDefault();
+    }
+  });
 }
 
 function createPetWindow() {
@@ -80,11 +114,17 @@ function createPetWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false // allow local blob/media
+      webSecurity: false, // allow local blob/media
+      backgroundThrottling: false, // Prevents 1fps throttle when unfocused
+      spellcheck: false
     }
   });
 
   loadAppUrl(petWindow, 'pet');
+
+  if (isDev) {
+    setupDevShortcuts(petWindow);
+  }
 
   petWindow.on('closed', () => {
     petWindow = null;
@@ -125,9 +165,14 @@ function createPetWindow() {
   });
 }
 
-function createStudioWindow() {
+function createStudioWindow(tab) {
   if (studioWindow && !studioWindow.isDestroyed()) {
+    if (studioWindow.isMinimized()) studioWindow.restore();
+    studioWindow.show();
     studioWindow.focus();
+    if (tab) {
+      studioWindow.webContents.send('switch-tab', tab);
+    }
     return;
   }
 
@@ -139,18 +184,24 @@ function createStudioWindow() {
     minWidth: 800,
     minHeight: 600,
     frame: true,
-    title: 'AI 桌面伴侣 - 形象工坊 & 模型与 Agent 协作中心',
+    title: 'AI 桌面伴侣 - 控制与设置中心',
     backgroundColor: '#090d16',
     icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: false
+      webSecurity: false,
+      spellcheck: false
     }
   });
 
-  loadAppUrl(studioWindow, 'studio');
+  const query = tab ? `studio&tab=${tab}` : 'studio';
+  loadAppUrl(studioWindow, query);
+
+  if (isDev) {
+    setupDevShortcuts(studioWindow);
+  }
 
   studioWindow.on('closed', () => {
     studioWindow = null;
@@ -158,9 +209,11 @@ function createStudioWindow() {
 }
 
 function setupTray() {
-  const trayIconPath = path.join(__dirname, 'tray-icon.png');
-  const trayImage = nativeImage.createFromPath(trayIconPath);
-  tray = new Tray(trayImage);
+  const trayIconPath = (process.platform === 'win32' && fs.existsSync(path.join(__dirname, 'icon.ico')))
+    ? path.join(__dirname, 'icon.ico')
+    : path.join(__dirname, 'tray-icon.png');
+
+  tray = new Tray(trayIconPath);
 
   const contextMenu = Menu.buildFromTemplate([
     {
@@ -170,19 +223,31 @@ function setupTray() {
     { type: 'separator' },
     {
       label: '🎨 形象工坊与媒体二次元化',
-      click: () => createStudioWindow()
+      click: () => createStudioWindow('stylize')
+    },
+    {
+      label: '🎵 音频与声音控制中心',
+      click: () => createStudioWindow('audio')
     },
     {
       label: '🤖 大模型与 Agent 协作中心',
-      click: () => createStudioWindow()
+      click: () => createStudioWindow('llm')
+    },
+    {
+      label: '⚙️ 伴侣角色与全局偏好',
+      click: () => createStudioWindow('pets')
     },
     { type: 'separator' },
     {
       label: '👁️ 显示 / 隐藏伴侣',
       click: () => {
-        if (petWindow) {
-          if (petWindow.isVisible()) petWindow.hide();
-          else petWindow.show();
+        if (petWindow && !petWindow.isDestroyed()) {
+          if (petWindow.isVisible()) {
+            petWindow.hide();
+          } else {
+            petWindow.show();
+            petWindow.focus();
+          }
         }
       }
     },
@@ -194,23 +259,31 @@ function setupTray() {
 
   tray.setToolTip('AI 桌面宠物 & Agent 协作中心');
   tray.setContextMenu(contextMenu);
+
+  // Explicit right-click listener guarantees context menu popup on Windows taskbar
+  tray.on('right-click', () => {
+    tray.popUpContextMenu(contextMenu);
+  });
+
+  // Left click restores and focuses pet window
   tray.on('click', () => {
-    if (petWindow) {
-      if (petWindow.isVisible()) {
-        petWindow.focus();
-      } else {
+    if (petWindow && !petWindow.isDestroyed()) {
+      if (petWindow.isMinimized()) petWindow.restore();
+      if (!petWindow.isVisible()) {
         petWindow.show();
       }
+      petWindow.focus();
     }
   });
+
   tray.on('double-click', () => {
     createStudioWindow();
   });
 }
 
 // IPC Handlers
-ipcMain.on('open-studio', () => {
-  createStudioWindow();
+ipcMain.on('open-studio', (event, tab) => {
+  createStudioWindow(tab);
 });
 
 ipcMain.on('close-app', () => {

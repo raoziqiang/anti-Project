@@ -5,12 +5,14 @@
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
+    "dev": "node electron/dev-runner.cjs",
+    "dev:web": "vite",
     "dev:vite": "vite",
+    "dev:electron": "node electron/dev-runner.cjs",
+    "build": "vite build",
     "build:vite": "vite build",
-    "dev:electron": "electron electron/main.cjs",
-    "dev": "vite",
-    "server": "node electron/server.cjs",
     "start": "electron electron/main.cjs",
+    "server": "node electron/server.cjs",
     "mcp": "node electron/mcp-server.cjs",
     "package:win": "node electron/package-app.cjs"
   },

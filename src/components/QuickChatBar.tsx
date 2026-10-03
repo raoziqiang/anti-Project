@@ -6,11 +6,14 @@ interface QuickChatBarProps {
   onSendMessage: (text: string) => void;
   onSetEmotion: (emotion: PetEmotion) => void;
   onOpenStudio: () => void;
+  onOpenAudioCenter?: () => void;
   isWsConnected: boolean;
   isSoundMuted: boolean;
   onToggleSound: () => void;
   currentScale?: number;
   onChangeScale?: (scale: number) => void;
+  currentVolume?: number;
+  onChangeVolume?: (volume: number) => void;
   isLoading?: boolean;
 }
 
@@ -18,16 +21,20 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
   onSendMessage,
   onSetEmotion,
   onOpenStudio,
+  onOpenAudioCenter,
   isWsConnected,
   isSoundMuted,
   onToggleSound,
   currentScale = 1.0,
   onChangeScale,
+  currentVolume = 0.8,
+  onChangeVolume,
   isLoading
 }) => {
   const [input, setInput] = useState('');
   const [showEmotions, setShowEmotions] = useState(false);
   const [showSizeMenu, setShowSizeMenu] = useState(false);
+  const [showAudioMenu, setShowAudioMenu] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,6 +235,129 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
         </div>
       )}
 
+      {/* Quick Audio Adjustment Popover */}
+      {showAudioMenu && (
+        <div style={{
+          background: 'rgba(11, 16, 28, 0.96)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(56, 189, 248, 0.35)',
+          borderRadius: '14px',
+          padding: '10px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '10px',
+          boxShadow: '0 12px 32px rgba(0, 0, 0, 0.6), 0 0 16px rgba(56, 189, 248, 0.2)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Volume2 size={14} style={{ color: '#38bdf8' }} />
+              <span>音量与声音</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 700,
+                fontFamily: 'monospace',
+                color: isSoundMuted ? '#f87171' : '#38bdf8',
+                background: isSoundMuted ? 'rgba(248, 113, 113, 0.15)' : 'rgba(56, 189, 248, 0.15)',
+                padding: '2px 8px',
+                borderRadius: '9999px'
+              }}>
+                {isSoundMuted ? '静音' : `${Math.round((currentVolume ?? 0.8) * 100)}%`}
+              </span>
+              <button
+                type="button"
+                onClick={onToggleSound}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: isSoundMuted ? '#f87171' : '#38bdf8',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+                title={isSoundMuted ? '解除静音' : '快速静音'}
+              >
+                {isSoundMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Volume Slider */}
+          {onChangeVolume && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={isSoundMuted ? 0 : (currentVolume ?? 0.8)}
+                disabled={isSoundMuted}
+                onChange={(e) => onChangeVolume(parseFloat(e.target.value))}
+                style={{ flex: 1, accentColor: '#38bdf8', height: '4px', cursor: isSoundMuted ? 'not-allowed' : 'pointer' }}
+              />
+            </div>
+          )}
+
+          {/* Quick Presets & Full Center Button */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '8px' }}>
+            <div style={{ display: 'flex', gap: '4px' }}>
+              {[
+                { label: '30%', val: 0.3 },
+                { label: '60%', val: 0.6 },
+                { label: '100%', val: 1.0 },
+              ].map(chip => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => {
+                    if (onChangeVolume) onChangeVolume(chip.val);
+                  }}
+                  style={{
+                    padding: '2px 6px',
+                    fontSize: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    color: 'var(--text-sub)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+
+            {onOpenAudioCenter && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAudioMenu(false);
+                  onOpenAudioCenter();
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(168, 85, 247, 0.25))',
+                  border: '1px solid rgba(56, 189, 248, 0.4)',
+                  color: '#fff',
+                  fontSize: '11px',
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontWeight: 500
+                }}
+              >
+                <span>🎛️ 音频控制中心</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Main chat input row */}
       <form onSubmit={handleSubmit} style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%' }}>
         <div style={{
@@ -355,10 +485,14 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
 
           <button
             type="button"
-            onClick={onToggleSound}
+            onClick={() => {
+              setShowAudioMenu(!showAudioMenu);
+              setShowSizeMenu(false);
+              setShowEmotions(false);
+            }}
             style={{
               flexShrink: 0,
-              background: 'transparent',
+              background: showAudioMenu ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
               border: 'none',
               color: isSoundMuted ? 'var(--text-dim)' : '#38bdf8',
               padding: '4px',
@@ -367,7 +501,7 @@ export const QuickChatBar: React.FC<QuickChatBarProps> = ({
               display: 'flex',
               alignItems: 'center'
             }}
-            title={isSoundMuted ? '开启声音' : '静音'}
+            title={isSoundMuted ? '声音已静音 (点击调音/打开音频控制中心)' : '音量与音频设置 (点击打开控制中心)'}
           >
             {isSoundMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
           </button>

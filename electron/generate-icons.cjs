@@ -146,6 +146,9 @@ function renderRobotPixel(x, y, size) {
   return [11, 19, 41, 240];
 }
 
+// Generate 16x16 for small taskbar/tray
+const icon16Buf = createPng(16, 16, (x, y) => renderRobotPixel(x, y, 16));
+
 // Generate 32x32 for Windows system tray
 const trayBuf = createPng(32, 32, (x, y) => renderRobotPixel(x, y, 32));
 fs.writeFileSync(path.join(__dirname, 'tray-icon.png'), trayBuf);
@@ -155,3 +158,35 @@ console.log('Created electron/tray-icon.png (32x32,', trayBuf.length, 'bytes)');
 const icon64Buf = createPng(64, 64, (x, y) => renderRobotPixel(x, y, 64));
 fs.writeFileSync(path.join(__dirname, 'icon.png'), icon64Buf);
 console.log('Created electron/icon.png (64x64,', icon64Buf.length, 'bytes)');
+
+// Assemble multi-resolution icon.ico for Windows (16, 32, 64)
+const frames = [
+  { size: 16, buf: icon16Buf },
+  { size: 32, buf: trayBuf },
+  { size: 64, buf: icon64Buf }
+];
+
+const icoHeader = Buffer.alloc(6);
+icoHeader.writeUInt16LE(0, 0); // Reserved
+icoHeader.writeUInt16LE(1, 2); // Type 1 = ICO
+icoHeader.writeUInt16LE(frames.length, 4); // Frame count
+
+let currentOffset = 6 + frames.length * 16;
+const dirEntries = [];
+for (const f of frames) {
+  const entry = Buffer.alloc(16);
+  entry.writeUInt8(f.size === 256 ? 0 : f.size, 0); // Width
+  entry.writeUInt8(f.size === 256 ? 0 : f.size, 1); // Height
+  entry.writeUInt8(0, 2); // Color count
+  entry.writeUInt8(0, 3); // Reserved
+  entry.writeUInt16LE(1, 4); // Color planes
+  entry.writeUInt16LE(32, 6); // Bits per pixel
+  entry.writeUInt32LE(f.buf.length, 8); // Size of image data
+  entry.writeUInt32LE(currentOffset, 12); // Offset to image data
+  dirEntries.push(entry);
+  currentOffset += f.buf.length;
+}
+
+const icoBuf = Buffer.concat([icoHeader, ...dirEntries, ...frames.map(f => f.buf)]);
+fs.writeFileSync(path.join(__dirname, 'icon.ico'), icoBuf);
+console.log('Created electron/icon.ico (multi-resolution 16/32/64,', icoBuf.length, 'bytes)');

@@ -16,11 +16,20 @@ const APPDATA_DIR = path.join(
 const CONFIG_FILE = path.join(APPDATA_DIR, 'config.json');
 const LOCAL_CONFIG_FILE = path.join(__dirname, '../user-config.json');
 
+let inMemoryConfig = null;
+let writeTimer = null;
+let pendingSaveData = null;
+
 function getStoredConfig() {
+  if (inMemoryConfig) return inMemoryConfig;
+
   try {
     if (fs.existsSync(CONFIG_FILE)) {
       const content = fs.readFileSync(CONFIG_FILE, 'utf8');
-      if (content && content.trim()) return JSON.parse(content);
+      if (content && content.trim()) {
+        inMemoryConfig = JSON.parse(content);
+        return inMemoryConfig;
+      }
     }
   } catch (e) {
     console.warn('[Server] Error reading AppData config:', e.message);
@@ -28,12 +37,38 @@ function getStoredConfig() {
   try {
     if (fs.existsSync(LOCAL_CONFIG_FILE)) {
       const content = fs.readFileSync(LOCAL_CONFIG_FILE, 'utf8');
-      if (content && content.trim()) return JSON.parse(content);
+      if (content && content.trim()) {
+        inMemoryConfig = JSON.parse(content);
+        return inMemoryConfig;
+      }
     }
   } catch (e) {
     console.warn('[Server] Error reading local config:', e.message);
   }
-  return {};
+  inMemoryConfig = {};
+  return inMemoryConfig;
+}
+
+function flushConfigToDisk(data) {
+  const jsonStr = JSON.stringify(data, null, 2);
+  try {
+    if (!fs.existsSync(APPDATA_DIR)) {
+      fs.mkdirSync(APPDATA_DIR, { recursive: true });
+    }
+    fs.writeFile(CONFIG_FILE, jsonStr, 'utf8', (err) => {
+      if (err) console.warn('[Server] Async write to AppData config error:', err.message);
+    });
+  } catch (e) {
+    console.warn('[Server] Could not prepare AppData dir:', e.message);
+  }
+
+  try {
+    fs.writeFile(LOCAL_CONFIG_FILE, jsonStr, 'utf8', (err) => {
+      if (err) console.warn('[Server] Async write to local config error:', err.message);
+    });
+  } catch (e) {
+    console.warn('[Server] Local config write error:', e.message);
+  }
 }
 
 function saveStoredConfig(patch) {
@@ -65,22 +100,22 @@ function saveStoredConfig(patch) {
       }
     };
 
-    // 1. Write to AppData directory
-    try {
-      if (!fs.existsSync(APPDATA_DIR)) {
-        fs.mkdirSync(APPDATA_DIR, { recursive: true });
-      }
-      fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf8');
-    } catch (e) {
-      console.warn('[Server] Could not write to AppData config:', e.message);
+    // If no meaningful changes, avoid any disk I/O
+    if (JSON.stringify(current) === JSON.stringify(updated)) {
+      return current;
     }
 
-    // 2. Also write to local project file
-    try {
-      fs.writeFileSync(LOCAL_CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf8');
-    } catch (e) {
-      console.warn('[Server] Could not write to local config:', e.message);
-    }
+    // Update in-memory cache immediately
+    inMemoryConfig = updated;
+
+    // Debounce async disk write (150ms) to prevent blocking Node / Electron event loop
+    pendingSaveData = updated;
+    if (writeTimer) clearTimeout(writeTimer);
+    writeTimer = setTimeout(() => {
+      if (pendingSaveData) {
+        flushConfigToDisk(pendingSaveData);
+      }
+    }, 150);
 
     return updated;
   } catch (err) {
@@ -312,12 +347,15 @@ app.get('/api/config', (req, res) => {
 
 app.post('/api/config', (req, res) => {
   const patch = req.body;
+  const current = getStoredConfig();
   const updated = saveStoredConfig(patch);
   if (updated) {
-    broadcast({
-      type: 'CONFIG_UPDATED',
-      payload: updated
-    });
+    if (JSON.stringify(current) !== JSON.stringify(updated)) {
+      broadcast({
+        type: 'CONFIG_UPDATED',
+        payload: updated
+      });
+    }
     res.json({ success: true, config: updated });
   } else {
     res.status(500).json({ error: 'Failed to persist configuration' });
