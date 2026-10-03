@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Sparkles, Wand2, Cpu, Radio, User, Settings, Check, Trash2, Shield, Activity, RefreshCw, Scaling, RotateCcw, Minus, Plus } from 'lucide-react';
+import { X, Sparkles, Wand2, Cpu, Radio, User, Settings, Check, Trash2, Shield, Activity, RefreshCw, Scaling, RotateCcw, Minus, Plus, Volume2, VolumeX, Mic, Music } from 'lucide-react';
 import { PetAvatar, LLMConfig, Persona, AppSettings, AgentNotification } from '../types';
 import { StylizeStudio } from './StylizeStudio';
 import { ModelGateway } from './ModelGateway';
@@ -394,20 +394,194 @@ export const StudioModal: React.FC<StudioModalProps> = ({
                     </label>
                   </div>
 
-                  {/* Sound and TTS toggle */}
+                  {/* Master Volume Slider */}
+                  <div style={{ padding: '16px 0', borderBottom: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div className="studio-toggle-label">
+                        <span className="studio-toggle-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {appSettings.volume > 0 && appSettings.soundEnabled ? (
+                            <Volume2 size={16} style={{ color: 'var(--accent-cyan)' }} />
+                          ) : (
+                            <VolumeX size={16} style={{ color: 'var(--text-dim)' }} />
+                          )}
+                          全局音频主音量 (Master Volume)
+                        </span>
+                        <span className="studio-toggle-desc">控制伴侣所有合成音效与 TTS 语音播报的总体音量输出</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          className="studio-slider-val"
+                          style={{
+                            background: 'rgba(56, 189, 248, 0.15)',
+                            border: '1px solid rgba(56, 189, 248, 0.3)',
+                            padding: '3px 10px',
+                            borderRadius: '9999px',
+                            fontSize: '13px'
+                          }}
+                        >
+                          {appSettings.soundEnabled ? `${Math.round((appSettings.volume ?? 0.8) * 100)}%` : '已静音'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newMuted = !appSettings.soundEnabled;
+                            onUpdateAppSettings({ ...appSettings, soundEnabled: newMuted });
+                            soundService.setMuted(!newMuted);
+                            if (newMuted) soundService.playPop();
+                          }}
+                          title={appSettings.soundEnabled ? '一键静音' : '取消静音'}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            color: appSettings.soundEnabled ? '#38bdf8' : 'var(--text-dim)',
+                            cursor: 'pointer',
+                            padding: '5px 8px',
+                            borderRadius: '6px',
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                        >
+                          {appSettings.soundEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+                        </button>
+                      </div>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={appSettings.volume ?? 0.8}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        onUpdateAppSettings({ ...appSettings, volume: val });
+                        soundService.setVolume(val);
+                      }}
+                      className="studio-slider"
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+
+                  {/* Sound FX Toggle */}
                   <div className="studio-toggle-row">
                     <div className="studio-toggle-label">
-                      <span className="studio-toggle-title">伴侣音效与语音朗读 (Sound & TTS)</span>
-                      <span className="studio-toggle-desc">启用伴侣点击交互声效、Agent 通知提醒铃声及语音合成播报</span>
+                      <span className="studio-toggle-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Music size={15} style={{ color: '#a855f7' }} />
+                        伴侣交互音效 (Sound Effects)
+                      </span>
+                      <span className="studio-toggle-desc">点击触碰叫声、气泡微弹、安眠呼噜声、Agent 通知与任务达成提示</span>
                     </div>
                     <label className="studio-switch">
                       <input
                         type="checkbox"
                         checked={appSettings.soundEnabled}
-                        onChange={(e) => onUpdateAppSettings({ ...appSettings, soundEnabled: e.target.checked })}
+                        onChange={(e) => {
+                          const enabled = e.target.checked;
+                          onUpdateAppSettings({ ...appSettings, soundEnabled: enabled });
+                          soundService.setMuted(!enabled);
+                          if (enabled) soundService.playHappy();
+                        }}
                       />
                       <span className="studio-switch-slider"></span>
                     </label>
+                  </div>
+
+                  {/* TTS Speech Toggle */}
+                  <div className="studio-toggle-row">
+                    <div className="studio-toggle-label">
+                      <span className="studio-toggle-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Mic size={15} style={{ color: '#ec4899' }} />
+                        AI 伴侣语音朗读 (TTS Speech)
+                      </span>
+                      <span className="studio-toggle-desc">大模型聊天对话、开机问候语、Agent 说话时自动语音朗读发音</span>
+                    </div>
+                    <label className="studio-switch">
+                      <input
+                        type="checkbox"
+                        checked={appSettings.ttsEnabled}
+                        onChange={(e) => {
+                          const tts = e.target.checked;
+                          onUpdateAppSettings({ ...appSettings, ttsEnabled: tts });
+                          if (tts) {
+                            soundService.speak('语音朗读已开启！', currentPersona.speechPitch, currentPersona.speechRate, currentPersona.voiceName);
+                          }
+                        }}
+                      />
+                      <span className="studio-switch-slider"></span>
+                    </label>
+                  </div>
+
+                  {/* Sound Audition Workshop */}
+                  <div style={{ padding: '14px 0', borderBottom: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-sub)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Sparkles size={14} style={{ color: '#38bdf8' }} />
+                      高保真音效试听工坊 (Sound Audition Workshop):
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => soundService.playPop()}
+                        className="preset-card"
+                        style={{ padding: '8px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                      >
+                        <span>🫧</span> 气泡微弹
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => soundService.playHappy()}
+                        className="preset-card"
+                        style={{ padding: '8px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                      >
+                        <span>🎵</span> 治愈八音盒
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => soundService.playPetTouch()}
+                        className="preset-card"
+                        style={{ padding: '8px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                      >
+                        <span>🐱</span> 萌动触碰
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => soundService.playAlert()}
+                        className="preset-card"
+                        style={{ padding: '8px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                      >
+                        <span>🔔</span> 水晶提示
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => soundService.playCelebrate()}
+                        className="preset-card"
+                        style={{ padding: '8px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                      >
+                        <span>✨</span> 梦幻庆祝
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => soundService.playSleepChime()}
+                        className="preset-card"
+                        style={{ padding: '8px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                      >
+                        <span>🌙</span> 恬静安眠
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => soundService.playSend()}
+                        className="preset-card"
+                        style={{ padding: '8px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                      >
+                        <span>✉️</span> 消息发送
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => soundService.playReceive()}
+                        className="preset-card"
+                        style={{ padding: '8px 10px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+                      >
+                        <span>💬</span> 收到回复
+                      </button>
+                    </div>
                   </div>
 
                   {/* Pet Scale & Bounds Configuration Section */}

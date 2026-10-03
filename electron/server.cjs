@@ -1,11 +1,93 @@
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
+const path = require('path');
+const fs = require('fs');
 const { WebSocketServer, WebSocket } = require('ws');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const APPDATA_DIR = path.join(
+  process.env.APPDATA || (process.platform === 'darwin' ? path.join(process.env.HOME || '', 'Library/Application Support') : path.join(process.env.HOME || '', '.config')),
+  'AI-Desktop-Pet'
+);
+const CONFIG_FILE = path.join(APPDATA_DIR, 'config.json');
+const LOCAL_CONFIG_FILE = path.join(__dirname, '../user-config.json');
+
+function getStoredConfig() {
+  try {
+    if (fs.existsSync(CONFIG_FILE)) {
+      const content = fs.readFileSync(CONFIG_FILE, 'utf8');
+      if (content && content.trim()) return JSON.parse(content);
+    }
+  } catch (e) {
+    console.warn('[Server] Error reading AppData config:', e.message);
+  }
+  try {
+    if (fs.existsSync(LOCAL_CONFIG_FILE)) {
+      const content = fs.readFileSync(LOCAL_CONFIG_FILE, 'utf8');
+      if (content && content.trim()) return JSON.parse(content);
+    }
+  } catch (e) {
+    console.warn('[Server] Error reading local config:', e.message);
+  }
+  return {};
+}
+
+function saveStoredConfig(patch) {
+  try {
+    const current = getStoredConfig();
+    
+    // Safety guard: do not wipe existing non-empty apiKey if incoming patch has empty apiKey,
+    // unless forceClearApiKey is explicitly set.
+    let targetApiKey = patch.llmConfig ? patch.llmConfig.apiKey : undefined;
+    if ((targetApiKey === undefined || targetApiKey === '') && current.llmConfig?.apiKey && !patch.forceClearApiKey) {
+      targetApiKey = current.llmConfig.apiKey;
+    }
+
+    const updated = {
+      ...current,
+      ...patch,
+      llmConfig: {
+        ...(current.llmConfig || {}),
+        ...(patch.llmConfig || {}),
+        ...(targetApiKey !== undefined ? { apiKey: targetApiKey } : {})
+      },
+      appSettings: {
+        ...(current.appSettings || {}),
+        ...(patch.appSettings || {})
+      },
+      currentPersona: {
+        ...(current.currentPersona || {}),
+        ...(patch.currentPersona || {})
+      }
+    };
+
+    // 1. Write to AppData directory
+    try {
+      if (!fs.existsSync(APPDATA_DIR)) {
+        fs.mkdirSync(APPDATA_DIR, { recursive: true });
+      }
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf8');
+    } catch (e) {
+      console.warn('[Server] Could not write to AppData config:', e.message);
+    }
+
+    // 2. Also write to local project file
+    try {
+      fs.writeFileSync(LOCAL_CONFIG_FILE, JSON.stringify(updated, null, 2), 'utf8');
+    } catch (e) {
+      console.warn('[Server] Could not write to local config:', e.message);
+    }
+
+    return updated;
+  } catch (err) {
+    console.error('[Server] Failed to save stored config:', err);
+    return null;
+  }
+}
 
 const PORT = process.env.PET_PORT || 18989;
 let currentPort = PORT;
@@ -222,6 +304,26 @@ app.post('/api/webhook/:source', (req, res) => {
   res.json({ received: true });
 });
 
+// 8. Persistent Configuration API
+app.get('/api/config', (req, res) => {
+  const config = getStoredConfig();
+  res.json({ success: true, config });
+});
+
+app.post('/api/config', (req, res) => {
+  const patch = req.body;
+  const updated = saveStoredConfig(patch);
+  if (updated) {
+    broadcast({
+      type: 'CONFIG_UPDATED',
+      payload: updated
+    });
+    res.json({ success: true, config: updated });
+  } else {
+    res.status(500).json({ error: 'Failed to persist configuration' });
+  }
+});
+
 function startServer(port = PORT) {
   currentPort = port;
   return new Promise((resolve) => {
@@ -256,7 +358,7 @@ function startServer(port = PORT) {
   });
 }
 
-module.exports = { startServer, broadcast, PORT };
+module.exports = { startServer, broadcast, PORT, getStoredConfig, saveStoredConfig };
 
 if (require.main === module) {
   startServer();

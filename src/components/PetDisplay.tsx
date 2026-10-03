@@ -35,9 +35,13 @@ export const PetDisplay: React.FC<PetDisplayProps> = ({
     setClickCount((prev) => prev + 1);
 
     if (effectiveEmotion === 'sleeping') {
-      soundService.playAlert();
+      soundService.playSleepChime();
     } else {
-      soundService.playHappy();
+      if (clickCount % 3 === 0) {
+        soundService.playHappy();
+      } else {
+        soundService.playPetTouch();
+      }
     }
 
     onPetClick();

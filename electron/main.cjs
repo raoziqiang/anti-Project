@@ -2,7 +2,10 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage } = require
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const { startServer, PORT } = require('./server.cjs');
+const { startServer, PORT, getStoredConfig, saveStoredConfig } = require('./server.cjs');
+
+// Explicitly define application name so userData folder is unified in dev & prod
+app.name = 'AI-Desktop-Pet';
 
 // Enforce single instance lock to avoid port collisions and duplicate desktop pets
 const gotTheLock = app.requestSingleInstanceLock();
@@ -212,6 +215,22 @@ ipcMain.on('open-studio', () => {
 
 ipcMain.on('close-app', () => {
   app.quit();
+});
+
+ipcMain.handle('load-config', () => {
+  return getStoredConfig();
+});
+
+ipcMain.handle('save-config', (event, patch) => {
+  const updated = saveStoredConfig(patch);
+  // Broadcast to all open renderer windows
+  const windows = BrowserWindow.getAllWindows();
+  for (const win of windows) {
+    if (!win.isDestroyed() && win.webContents !== event.sender) {
+      win.webContents.send('config-updated', updated);
+    }
+  }
+  return updated;
 });
 
 app.whenReady().then(async () => {

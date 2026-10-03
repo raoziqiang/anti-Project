@@ -3,6 +3,7 @@ import { AgentNotification, ChatMessage, PetEmotion } from '../types';
 type NotificationListener = (notification: AgentNotification) => void;
 type EmotionListener = (emotion: PetEmotion) => void;
 type MessageListener = (message: ChatMessage) => void;
+type ConfigListener = (config: any) => void;
 
 class AgentService {
   private ws: WebSocket | null = null;
@@ -10,6 +11,7 @@ class AgentService {
   private notificationListeners: Set<NotificationListener> = new Set();
   private emotionListeners: Set<EmotionListener> = new Set();
   private messageListeners: Set<MessageListener> = new Set();
+  private configListeners: Set<ConfigListener> = new Set();
   private reconnectTimer: NodeJS.Timeout | null = null;
   private port: number = 18989;
 
@@ -121,6 +123,12 @@ class AgentService {
         this.messageListeners.forEach(listener => listener(msg));
         break;
       }
+      case 'CONFIG_UPDATED': {
+        if (data.payload) {
+          this.configListeners.forEach(listener => listener(data.payload));
+        }
+        break;
+      }
     }
   }
 
@@ -155,6 +163,11 @@ class AgentService {
   public onMessage(listener: MessageListener) {
     this.messageListeners.add(listener);
     return () => { this.messageListeners.delete(listener); };
+  }
+
+  public onConfigUpdated(listener: ConfigListener) {
+    this.configListeners.add(listener);
+    return () => { this.configListeners.delete(listener); };
   }
 }
 

@@ -22,12 +22,14 @@ node_modules/
 .DS_Store
 *.pem
 
-# Environment variables
+# Environment variables & Local configuration
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+user-config.json
+config.json
 
 # Editor directories and files
 .vscode/*

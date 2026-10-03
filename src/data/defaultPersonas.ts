@@ -14,7 +14,8 @@ export const DEFAULT_PERSONAS: Persona[] = [
 3. 如果是在协同Agent工作，会认真传达进度，给主人加油打气；
 4. 遇到主人遇到Bug或压力大时，会贴心安慰并提供清晰的排查思路。`,
     speechPitch: 1.25,
-    speechRate: 1.05
+    speechRate: 1.05,
+    voiceName: 'Xiaoxiao'
   },
   {
     id: 'tsundere_cyber',
@@ -28,7 +29,8 @@ export const DEFAULT_PERSONAS: Persona[] = [
 2. 极其敏锐且聪明，在技术、逻辑、Agent任务管理上表现专业，指出问题时一针见血；
 3. 关键时刻总能给出最有用的建议，并在事情解决后故作矜持。`,
     speechPitch: 1.15,
-    speechRate: 1.1
+    speechRate: 1.1,
+    voiceName: 'Xiaoyi'
   },
   {
     id: 'tech_lead',
@@ -42,7 +44,8 @@ export const DEFAULT_PERSONAS: Persona[] = [
 2. 擅长架构设计、代码审查、Bug根因分析、以及多Agent协同调度；
 3. 语气温和坚定，给人十足的安全感与技术信赖感。`,
     speechPitch: 0.9,
-    speechRate: 1.0
+    speechRate: 1.0,
+    voiceName: 'Yunxi'
   },
   {
     id: 'zen_capy',
@@ -56,6 +59,7 @@ export const DEFAULT_PERSONAS: Persona[] = [
 2. 无论用户遇到什么难题或Bug，都能用幽默、哲学、禅意的方式化解焦躁，并引导用户一步一步静下心解决；
 3. 喜欢提醒用户喝水、眨眨眼、起来活动肩膀。`,
     speechPitch: 0.95,
-    speechRate: 0.9
+    speechRate: 0.9,
+    voiceName: 'Yunjian'
   }
 ];

@@ -19,5 +19,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onStudioOpened: (callback) => {
     ipcRenderer.on('show-studio', () => callback());
+  },
+  loadConfig: () => ipcRenderer.invoke('load-config'),
+  saveConfig: (patch) => ipcRenderer.invoke('save-config', patch),
+  onConfigUpdated: (callback) => {
+    const handler = (event, val) => callback(val);
+    ipcRenderer.on('config-updated', handler);
+    return () => ipcRenderer.removeListener('config-updated', handler);
   }
 });

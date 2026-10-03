@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Cpu, Key, Globe, Layers, Zap, CheckCircle2, AlertCircle, Play, Eye, EyeOff, Sparkles, Terminal } from 'lucide-react';
+import { Cpu, Key, Globe, Layers, Zap, CheckCircle2, AlertCircle, Play, Eye, EyeOff, Sparkles, Terminal, Save, ShieldCheck } from 'lucide-react';
 import { LLMConfig, LLMProviderId } from '../types';
 import { LLMService } from '../services/llmService';
 import { soundService } from '../services/soundService';
+import { configService } from '../services/configService';
 
 interface ModelGatewayProps {
   config: LLMConfig;
@@ -14,6 +15,8 @@ export const ModelGateway: React.FC<ModelGatewayProps> = ({ config, onChange }) 
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'failed'>('idle');
   const [testResult, setTestResult] = useState<string>('');
   const [latency, setLatency] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string>('');
 
   const providers: {
     id: LLMProviderId;
@@ -114,6 +117,7 @@ export const ModelGateway: React.FC<ModelGatewayProps> = ({ config, onChange }) 
   const handleTestConnection = async () => {
     setTestStatus('testing');
     setTestResult('');
+    setSaveMessage('');
     const startTime = performance.now();
 
     try {
@@ -134,11 +138,31 @@ export const ModelGateway: React.FC<ModelGatewayProps> = ({ config, onChange }) 
       setLatency(elapsed);
       setTestStatus('success');
       soundService.playHappy();
+
+      // Automatically persist valid config to disk
+      await configService.savePersistentConfig({ llmConfig: config });
+      setSaveMessage('连通成功 · 密钥与配置已永久保存至本地磁盘');
+      setTimeout(() => setSaveMessage(''), 5000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setTestStatus('failed');
       setTestResult(`连接测试失败: ${msg}`);
       soundService.playAlert();
+    }
+  };
+
+  const handleManualSave = async () => {
+    setIsSaving(true);
+    setSaveMessage('');
+    try {
+      await configService.savePersistentConfig({ llmConfig: config });
+      setSaveMessage('配置已永久保存至本地磁盘');
+      soundService.playSuccess();
+    } catch {
+      setSaveMessage('保存失败，请检查服务状态');
+    } finally {
+      setIsSaving(false);
+      setTimeout(() => setSaveMessage(''), 4000);
     }
   };
 
@@ -222,8 +246,12 @@ export const ModelGateway: React.FC<ModelGatewayProps> = ({ config, onChange }) 
               <label style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Key size={13} style={{ color: '#38bdf8' }} /> API Key 密钥:
               </label>
-              {config.provider === 'ollama' && (
+              {config.provider === 'ollama' ? (
                 <span style={{ fontSize: '10px', color: '#10b981' }}>本地部署无需 API Key</span>
+              ) : (
+                <span style={{ fontSize: '11px', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <ShieldCheck size={12} /> 磁盘持久化守护已生效
+                </span>
               )}
             </div>
             <div style={{ position: 'relative' }}>
@@ -331,7 +359,7 @@ export const ModelGateway: React.FC<ModelGatewayProps> = ({ config, onChange }) 
           flexWrap: 'wrap',
           gap: '12px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <button
               onClick={handleTestConnection}
               disabled={testStatus === 'testing'}
@@ -341,7 +369,23 @@ export const ModelGateway: React.FC<ModelGatewayProps> = ({ config, onChange }) 
               {testStatus === 'testing' ? '正在连通测试...' : '测试大模型连通性 (Ping)'}
             </button>
 
-            {testStatus === 'success' && (
+            <button
+              onClick={handleManualSave}
+              disabled={isSaving}
+              className="studio-btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Save size={13} />
+              {isSaving ? '保存中...' : '保存配置到本地磁盘'}
+            </button>
+
+            {saveMessage && (
+              <span style={{ fontSize: '12px', color: '#34d399', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <CheckCircle2 size={15} /> {saveMessage}
+              </span>
+            )}
+
+            {testStatus === 'success' && !saveMessage && (
               <span style={{ fontSize: '12px', color: '#34d399', display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <CheckCircle2 size={15} /> 连通成功 · 响应延迟 {latency}ms
               </span>

@@ -9,6 +9,7 @@ import { StudioModal } from './components/StudioModal';
 import { agentService } from './services/agentService';
 import { soundService } from './services/soundService';
 import { LLMService } from './services/llmService';
+import { configService } from './services/configService';
 import { Sparkles, Settings, ExternalLink, Monitor, Bot } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -60,7 +61,24 @@ export const App: React.FC = () => {
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
     try {
       const saved = localStorage.getItem('ai_pet_settings');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          alwaysOnTop: true,
+          clickThrough: false,
+          soundEnabled: true,
+          petScale: 1.0,
+          opacity: 1.0,
+          idleWander: false,
+          activePetId: DEFAULT_PETS[0].id,
+          activePersonaId: DEFAULT_PERSONAS[0].id,
+          apiPort: 18989,
+          mcpEnabled: true,
+          ...parsed,
+          ttsEnabled: parsed.ttsEnabled !== undefined ? parsed.ttsEnabled : true,
+          volume: parsed.volume !== undefined ? parsed.volume : 0.8
+        };
+      }
     } catch {}
     return {
       alwaysOnTop: true,
@@ -105,51 +123,100 @@ export const App: React.FC = () => {
   // Active pet object
   const activePet = pets.find(p => p.id === activePetId) || pets[0] || DEFAULT_PETS[0];
 
-  // Cross-window synchronization via localStorage storage event
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (!e.key || !e.newValue) return;
-      try {
-        if (e.key === 'ai_pet_list') {
-          setPets(JSON.parse(e.newValue));
-        } else if (e.key === 'ai_pet_active_id') {
-          setActivePetId(e.newValue);
-        } else if (e.key === 'ai_pet_persona') {
-          setCurrentPersona(JSON.parse(e.newValue));
-        } else if (e.key === 'ai_pet_llm') {
-          setLlmConfig(JSON.parse(e.newValue));
-        } else if (e.key === 'ai_pet_settings') {
-          setAppSettings(JSON.parse(e.newValue));
-        }
-      } catch (err) {
-        console.error('Storage sync error:', err);
-      }
-    };
+  const isHydrated = useRef(false);
 
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+  // 1. Initial hydration from persistent storage (Electron IPC / Gateway REST / LocalStorage)
+  useEffect(() => {
+    let isMounted = true;
+    configService.loadPersistentConfig().then((config) => {
+      if (!isMounted) return;
+      if (config.llmConfig) {
+        setLlmConfig(prev => ({
+          ...prev,
+          ...config.llmConfig,
+          apiKey: config.llmConfig?.apiKey || prev.apiKey || ''
+        }));
+      }
+      if (config.appSettings) {
+        setAppSettings(prev => ({
+          ...prev,
+          ...config.appSettings
+        }));
+      }
+      if (config.currentPersona) {
+        setCurrentPersona(prev => ({
+          ...prev,
+          ...config.currentPersona
+        }));
+      }
+      if (config.activePetId) {
+        setActivePetId(config.activePetId);
+      }
+      if (config.pets && config.pets.length > 0) {
+        setPets(config.pets);
+      }
+      isHydrated.current = true;
+    });
+
+    // 2. Cross-window / WebSocket config sync
+    const unsubscribe = configService.onConfigChange((updated) => {
+      if (updated.llmConfig) {
+        setLlmConfig(prev => ({
+          ...prev,
+          ...updated.llmConfig,
+          apiKey: updated.llmConfig?.apiKey || prev.apiKey || ''
+        }));
+      }
+      if (updated.appSettings) {
+        setAppSettings(prev => ({ ...prev, ...updated.appSettings }));
+      }
+      if (updated.currentPersona) {
+        setCurrentPersona(prev => ({ ...prev, ...updated.currentPersona }));
+      }
+      if (updated.activePetId) {
+        setActivePetId(updated.activePetId);
+      }
+      if (updated.pets && updated.pets.length > 0) {
+        setPets(updated.pets);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
   }, []);
 
-  // Save changes to localStorage
+  // Save changes to persistent storage & localStorage (guarded by isHydrated to avoid race condition wipe)
   useEffect(() => {
-    localStorage.setItem('ai_pet_list', JSON.stringify(pets));
+    if (!isHydrated.current) return;
+    configService.savePersistentConfig({ pets });
   }, [pets]);
 
   useEffect(() => {
-    localStorage.setItem('ai_pet_active_id', activePetId);
+    if (!isHydrated.current) return;
+    configService.savePersistentConfig({ activePetId });
   }, [activePetId]);
 
   useEffect(() => {
-    localStorage.setItem('ai_pet_persona', JSON.stringify(currentPersona));
+    if (!isHydrated.current) return;
+    configService.savePersistentConfig({ currentPersona });
   }, [currentPersona]);
 
   useEffect(() => {
-    localStorage.setItem('ai_pet_llm', JSON.stringify(llmConfig));
+    if (!isHydrated.current) return;
+    configService.savePersistentConfig({ llmConfig });
   }, [llmConfig]);
 
   useEffect(() => {
-    localStorage.setItem('ai_pet_settings', JSON.stringify(appSettings));
     soundService.setMuted(!appSettings.soundEnabled);
+    soundService.setVolume(appSettings.volume ?? 0.8);
+    if (appSettings.apiPort) {
+      configService.setGatewayPort(appSettings.apiPort);
+      agentService.setPort(appSettings.apiPort);
+    }
+    if (!isHydrated.current) return;
+    configService.savePersistentConfig({ appSettings });
   }, [appSettings]);
 
   // Dynamically adapt Electron window size based on pet scale
@@ -180,7 +247,7 @@ export const App: React.FC = () => {
       if (appSettings.soundEnabled) {
         soundService.playHappy();
         if (appSettings.ttsEnabled) {
-          soundService.speak(currentPersona.greeting, currentPersona.speechPitch, currentPersona.speechRate);
+          soundService.speak(currentPersona.greeting, currentPersona.speechPitch, currentPersona.speechRate, currentPersona.voiceName);
         }
       }
     }, 600);
@@ -233,7 +300,12 @@ export const App: React.FC = () => {
     const unsubMsg = agentService.onMessage((msg) => {
       setCurrentMessage(msg);
       if (msg.emotion) setEmotion(msg.emotion);
-      if (appSettings.soundEnabled) soundService.playPop();
+      if (appSettings.soundEnabled) {
+        soundService.playReceive();
+        if (appSettings.ttsEnabled && msg.content) {
+          soundService.speak(msg.content, currentPersona.speechPitch, currentPersona.speechRate, currentPersona.voiceName);
+        }
+      }
     });
 
     // Check URL parameters for electron view
@@ -252,7 +324,7 @@ export const App: React.FC = () => {
 
   // User chat submission
   const handleUserSendMessage = async (text: string) => {
-    soundService.playPop();
+    soundService.playSend();
 
     // Show user question briefly in bubble
     setCurrentMessage({
@@ -287,10 +359,10 @@ export const App: React.FC = () => {
       );
 
       setEmotion('happy');
-      soundService.playHappy();
+      soundService.playReceive();
 
-      if (appSettings.ttsEnabled) {
-        soundService.speak(replyAccumulated, currentPersona.speechPitch, currentPersona.speechRate);
+      if (appSettings.ttsEnabled && appSettings.soundEnabled) {
+        soundService.speak(replyAccumulated, currentPersona.speechPitch, currentPersona.speechRate, currentPersona.voiceName);
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -467,7 +539,7 @@ export const App: React.FC = () => {
           message={currentMessage}
           isStreaming={isStreaming}
           onDismiss={() => setCurrentMessage(null)}
-          onReplayVoice={(text) => soundService.speak(text, currentPersona.speechPitch, currentPersona.speechRate)}
+          onReplayVoice={(text) => soundService.speak(text, currentPersona.speechPitch, currentPersona.speechRate, currentPersona.voiceName)}
           onSelectOption={handleSelectOption}
         />
 
@@ -494,8 +566,8 @@ export const App: React.FC = () => {
                 timestamp: Date.now(),
                 emotion: 'happy'
               });
-              if (appSettings.ttsEnabled) {
-                soundService.speak(remark, currentPersona.speechPitch, currentPersona.speechRate);
+              if (appSettings.ttsEnabled && appSettings.soundEnabled) {
+                soundService.speak(remark, currentPersona.speechPitch, currentPersona.speechRate, currentPersona.voiceName);
               }
             }
           }}

@@ -1,8 +1,8 @@
-import React from 'react';
-import { UserCheck, Volume2, Sparkles, Sliders, MessageCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { UserCheck, Volume2, Sparkles, Sliders, MessageCircle, Mic } from 'lucide-react';
 import { Persona } from '../types';
 import { DEFAULT_PERSONAS } from '../data/defaultPersonas';
-import { soundService } from '../services/soundService';
+import { soundService, VoiceOption } from '../services/soundService';
 
 interface PersonaEditorProps {
   currentPersona: Persona;
@@ -15,11 +15,27 @@ export const PersonaEditor: React.FC<PersonaEditorProps> = ({
   onSelectPersona,
   onUpdatePersona
 }) => {
+  const [voices, setVoices] = useState<VoiceOption[]>([]);
+
+  useEffect(() => {
+    const updateVoices = () => {
+      const v = soundService.getVoiceOptions();
+      if (v.length > 0) {
+        setVoices(v);
+      }
+    };
+    updateVoices();
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = updateVoices;
+    }
+  }, []);
+
   const handleTestVoice = () => {
     soundService.speak(
       currentPersona.greeting || '主人，我已经准备好为您服务啦！喵~',
       currentPersona.speechPitch,
-      currentPersona.speechRate
+      currentPersona.speechRate,
+      currentPersona.voiceName
     );
   };
 
@@ -122,55 +138,88 @@ export const PersonaEditor: React.FC<PersonaEditorProps> = ({
           {/* TTS Audio Controls */}
           <div style={{
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '16px',
+            flexDirection: 'column',
+            gap: '14px',
             paddingTop: '16px',
             borderTop: '1px solid var(--border-subtle)'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-              {/* Pitch */}
-              <div className="studio-slider-wrapper" style={{ width: '160px' }}>
-                <div className="studio-slider-header">
-                  <span>语音音调 (Pitch)</span>
-                  <span className="studio-slider-val">{currentPersona.speechPitch}</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="1.8"
-                  step="0.05"
-                  value={currentPersona.speechPitch}
-                  onChange={(e) => onUpdatePersona({ ...currentPersona, speechPitch: Number(e.target.value) })}
-                  className="studio-slider"
-                />
-              </div>
-
-              {/* Rate */}
-              <div className="studio-slider-wrapper" style={{ width: '160px' }}>
-                <div className="studio-slider-header">
-                  <span>语速 (Rate)</span>
-                  <span className="studio-slider-val">{currentPersona.speechRate}</span>
-                </div>
-                <input
-                  type="range"
-                  min="0.6"
-                  max="1.6"
-                  step="0.05"
-                  value={currentPersona.speechRate}
-                  onChange={(e) => onUpdatePersona({ ...currentPersona, speechRate: Number(e.target.value) })}
-                  className="studio-slider"
-                />
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label style={{ fontSize: '12px', color: 'var(--text-sub)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Mic size={14} style={{ color: '#38bdf8' }} />
+                人设发音音色 (Voice Persona):
+              </label>
+              <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+                {voices.length > 0 ? `已检测到 ${voices.length} 种系统语音` : '使用智能优选中文音色'}
+              </span>
             </div>
 
-            <button
-              onClick={handleTestVoice}
-              className="studio-btn-primary"
-            >
-              <Volume2 size={14} /> 试听人设发音
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '220px' }}>
+                <select
+                  value={currentPersona.voiceName || ''}
+                  onChange={(e) => onUpdatePersona({ ...currentPersona, voiceName: e.target.value || undefined })}
+                  className="studio-input"
+                  style={{
+                    cursor: 'pointer',
+                    background: 'rgba(15, 23, 42, 0.6)',
+                    color: '#fff',
+                    padding: '8px 12px'
+                  }}
+                >
+                  <option value="">✨ 自动优选最佳自然中文音色 (Auto Recommended)</option>
+                  {voices.map(v => (
+                    <option key={v.name} value={v.name}>
+                      {v.label} ({v.lang})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                {/* Pitch */}
+                <div className="studio-slider-wrapper" style={{ width: '130px' }}>
+                  <div className="studio-slider-header">
+                    <span>音调 (Pitch)</span>
+                    <span className="studio-slider-val">{currentPersona.speechPitch}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="1.8"
+                    step="0.05"
+                    value={currentPersona.speechPitch}
+                    onChange={(e) => onUpdatePersona({ ...currentPersona, speechPitch: Number(e.target.value) })}
+                    className="studio-slider"
+                  />
+                </div>
+
+                {/* Rate */}
+                <div className="studio-slider-wrapper" style={{ width: '130px' }}>
+                  <div className="studio-slider-header">
+                    <span>语速 (Rate)</span>
+                    <span className="studio-slider-val">{currentPersona.speechRate}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.6"
+                    max="1.6"
+                    step="0.05"
+                    value={currentPersona.speechRate}
+                    onChange={(e) => onUpdatePersona({ ...currentPersona, speechRate: Number(e.target.value) })}
+                    className="studio-slider"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleTestVoice}
+                  className="studio-btn-primary"
+                  style={{ whiteSpace: 'nowrap' }}
+                >
+                  <Volume2 size={14} /> 试听人设发音
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
